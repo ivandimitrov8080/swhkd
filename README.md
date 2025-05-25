@@ -33,8 +33,21 @@ Xorg or Wayland desktops, and you can even use `swhkd` in a TTY.
 ## Running
 
 ```bash
+./swhks && doas ./swhkd
+```
+
+The doas or sudo can be skipped by making the swhkd binary a setuid binary.
+This can be done by running the following command:
+
+```bash
+sudo chown root:root swhkd
+sudo chmod u+s swhkd
+```
+
+then to start,
+```bash
 swhks &
-pkexec swhkd
+swhkd
 ```
 
 ## Runtime signals
@@ -49,16 +62,25 @@ After opening `swhkd`, you can control the program through signals:
 
 `swhkd` closely follows `sxhkd` syntax, so most existing `sxhkd` configs should
 be functional with `swhkd`.
+More information about the sxhkd syntax can be found in the official man pages from the [arch wiki](https://man.archlinux.org/man/sxhkd.1).
 
-The default configuration file is in `/etc/swhkd/swhkdrc`. If you don't like
-having to edit the file as root every single time, you can create a symlink from
-`~/.config/swhkd/swhkdrc` to `/etc/swhkd/swhkdrc`.
+The default configuration file is in `~/.config/swhkd/swhkdrc` with a fallback to `etc/swhkd/swhkdrc`.
 
 If you use Vim, you can get `swhkd` config syntax highlighting with the
 [swhkd-vim](https://github.com/waycrate/swhkd-vim) plugin. Install it in
 vim-plug with `Plug 'waycrate/swhkd-vim'`.
 
 All supported key and modifier names are listed in `man 5 swhkd-keys`.
+
+## Environment Variables
+
+The environment variables are now sourced using the SWHKS binary, running in the background which are then supplemented
+to the command that is to be run, thus emulating the environment variables in the default shell.
+
+The commands are executed via *SHELL -c 'command'*, hence the environment is sourced from the default shell.
+If the user wants to use a different set of environment variables, they can set the environment variables
+in the default shell or export the environment variables within a logged in instance of their shell before
+running the SWHKS binary.
 
 ## Autostart
 
@@ -75,13 +97,13 @@ All supported key and modifier names are listed in `man 5 swhkd-keys`.
 ## Security
 
 We use a server-client model to keep you safe. The daemon (`swhkd` — privileged
-process) communicates to the server (`swhks` — running as non-root user) after
-checking for valid keybindings. Since the daemon is totally separate from the
-server, no other process can read your keystrokes. As for shell commands, you
-might be thinking that any program can send shell commands to the server and
-that's true! But the server runs the commands as the currently logged-in user,
-so no extra permissions are provided (This is essentially the same as any app on
-your desktop calling shell commands).
+process) is responsible for listening to key events and running shell commands.
+The server (`swhks` — non-privileged process) is responsible for keeping a track of the
+environment variables and sending them to the daemon. The daemon
+uses these environment variables while running the shell commands.
+The daemon only runs shell commands that have been parsed from the config file and there is no way to
+run arbitrary shell commands. The server is responsible for only sending the environment variables to the daemon and nothing else.
+This separation of responsibilities ensures security.
 
 So yes, you're safe!
 
