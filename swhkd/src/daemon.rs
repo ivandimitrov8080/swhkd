@@ -12,7 +12,7 @@ use std::{
     collections::{HashMap, HashSet},
     env,
     error::Error,
-    fs::{self, File, OpenOptions, Permissions},
+    fs::{self, OpenOptions, Permissions},
     io::{Read, Write},
     os::unix::{fs::PermissionsExt, net::UnixStream},
     path::{Path, PathBuf},
@@ -192,7 +192,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         while let Some(command) = rx.recv().await {
             // Clone the arc references to be used in the thread
             let pairs = pairs.clone();
-            let log = log.clone();
 
             // Set the user and group id to the invoking user for the thread
             setgid(Gid::from_raw(invoking_uid))
@@ -201,27 +200,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .expect(&format!("Failed to set user-id to {}", invoking_uid));
 
             // Command execution
-            let mut cmd = Command::new("sh");
-            cmd.arg("-c")
-                .arg(command.clone())
-                .stdin(Stdio::null())
-                .stdout(match File::open(&log) {
-                    Ok(file) => file,
-                    Err(e) => {
-                        println!("Error: {}", e);
-                        _ = Command::new("notify-send").arg(format!("ERROR {}", e)).spawn();
-                        exit(1);
-                    }
-                })
-                .stderr(match File::open(&log) {
-                    Ok(file) => file,
-                    Err(e) => {
-                        println!("Error: {}", e);
-                        _ = Command::new("notify-send").arg(format!("ERROR {}", e)).spawn();
-                        exit(1);
-                    }
-                });
-
+            let mut parts = command.as_str().split(" ").map(|s| s.trim()).filter(|s| !s.is_empty());
+            let mut cmd: Command = Command::new(match parts.next() {
+                Some(v) => v,
+                None => {
+                    log::error!("Command is empty");
+                    ""
+                }
+            });
+            cmd.stdin(Stdio::null());
+            for v in parts.clone() {
+                cmd.arg(v);
+            }
             // Set the environment variables for the command
             for (key, value) in pairs.lock().unwrap().iter() {
                 cmd.env(key, value);
@@ -233,7 +223,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 }
                 Err(e) => {
                     log::error!("Failed to execute command: {}", e);
-                    log::error!("The command: {}", command);
+                    log::error!("The command: {:?}", parts);
                 }
             }
         }
