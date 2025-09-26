@@ -203,7 +203,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             // Command execution
             let mut cmd = Command::new("sh");
             cmd.arg("-c")
-                .arg(command)
+                .arg(command.clone())
                 .stdin(Stdio::null())
                 .stdout(match File::open(&log) {
                     Ok(file) => file,
@@ -231,7 +231,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 Ok(_) => {
                     log::info!("Command executed successfully.");
                 }
-                Err(e) => log::error!("Failed to execute command: {}", e),
+                Err(e) => {
+                    log::error!("Failed to execute command: {}", e);
+                    log::error!("The command: {}", command);
+                }
             }
         }
     });
